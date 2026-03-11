@@ -26,5 +26,3 @@ The system automatically fetches the video transcript and generates a concise su
 6. The summary is displayed in the Streamlit interface.
 
 ---
-
-## 🏗️ Project Structure
