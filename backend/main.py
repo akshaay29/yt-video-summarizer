@@ -13,10 +13,16 @@ load_dotenv()
 
 app = FastAPI(title="AgentTube AI API")
 
-# Configure CORS
+# Configure CORS — reads from ALLOWED_ORIGINS env var, defaults to allow all
+raw_origins = os.environ.get("ALLOWED_ORIGINS", "*")
+if raw_origins == "*":
+    allowed_origins = ["*"]
+else:
+    allowed_origins = [o.strip() for o in raw_origins.split(",")]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # For production, restrict this to the frontend URL
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
