@@ -1,106 +1,186 @@
+import random
+import requests as http_requests
+from urllib.parse import urlparse, parse_qs
 from youtube_transcript_api import YouTubeTranscriptApi
 from youtube_transcript_api._errors import NoTranscriptFound, TranscriptsDisabled
-from urllib.parse import urlparse, parse_qs
+
+
+# ─── Helpers ───────────────────────────────────────────────
+
 
 def get_video_id(url: str) -> str:
     """Extract YouTube video ID from URL."""
     try:
-        parsed_url = urlparse(url)
-        if "youtube.com" in parsed_url.netloc:
-            return parse_qs(parsed_url.query)["v"][0]
-        elif "youtu.be" in parsed_url.netloc:
-            return parsed_url.path[1:].split("?")[0]
+        parsed = urlparse(url)
+        if "youtube.com" in parsed.netloc:
+            return parse_qs(parsed.query)["v"][0]
+        elif "youtu.be" in parsed.netloc:
+            return parsed.path[1:].split("?")[0]
         else:
-            raise ValueError("Invalid YouTube URL")
+            raise ValueError("Not a recognisable YouTube URL.")
     except Exception as e:
-        raise ValueError(f"Could not extract video ID from URL: {url}. Error: {str(e)}")
+        raise ValueError(f"Could not extract video ID from: {url}. ({e})")
 
 
-import requests
-import random
-
-def get_free_proxies():
-    """Fetch a list of free HTTP proxies to bypass Cloud IP blocks."""
-    try:
-        response = requests.get(
-            "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/http.txt", 
-            timeout=5
-        )
-        if response.status_code == 200:
-            proxies = response.text.strip().split("\n")
-            # Filter empty lines and shuffle
-            proxies = [p.strip() for p in proxies if p.strip()]
-            random.shuffle(proxies)
-            return proxies
-    except Exception:
-        pass
-    return []
-
-def fetch_with_api(video_id: str, proxies_dict=None):
-    """Helper to fetch transcript using the API, optionally with a proxy."""
-    # In youtube-transcript-api v1.x, proxies go to the constructor, not list()
-    api = YouTubeTranscriptApi(proxies=proxies_dict) if proxies_dict else YouTubeTranscriptApi()
+def _ytt_api_fetch(video_id: str) -> dict:
+    """
+    Attempt transcript retrieval via youtube-transcript-api.
+    Works perfectly on local machines and non-blocked IPs.
+    """
+    api = YouTubeTranscriptApi()
     transcript_list = api.list(video_id)
 
-    fetched = None
-    language_used = None
-
-    # 1. Try manual or generated English
+    fetched, lang_used = None, None
     for lang in ["en", "en-US", "en-GB"]:
         try:
             fetched = transcript_list.find_transcript([lang]).fetch()
-            language_used = lang
+            lang_used = lang
             break
         except NoTranscriptFound:
             continue
 
-    # 2. Fall back to any available transcript
     if fetched is None:
         first = next(iter(transcript_list))
         fetched = first.fetch()
-        language_used = first.language_code
+        lang_used = first.language_code
 
-    full_transcript = " ".join([snippet.text for snippet in fetched.snippets])
-    return {
-        "video_id": video_id,
-        "text": full_transcript,
-        "language": language_used,
+    text = " ".join(s.text for s in fetched.snippets)
+    return {"video_id": video_id, "text": text, "language": lang_used}
+
+
+def _ytdlp_fetch(video_url: str, video_id: str) -> dict:
+    """
+    Fallback: use yt-dlp to get the CDN subtitle URL, then download it.
+    yt-dlp rotates its own cookies/headers and the CDN URLs themselves
+    are not IP-restricted, so this bypasses cloud IP bans.
+    """
+    try:
+        import yt_dlp
+    except ImportError:
+        raise ValueError("yt-dlp is not installed.")
+
+    ydl_opts = {
+        "skip_download": True,
+        "quiet": True,
+        "no_warnings": True,
     }
+
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        info = ydl.extract_info(video_url, download=False)
+
+    # Manual subs override auto-captions
+    auto = info.get("automatic_captions", {})
+    manual = info.get("subtitles", {})
+    all_subs = {**auto, **manual}
+
+    if not all_subs:
+        raise ValueError("No subtitle tracks found for this video.")
+
+    priority = ["en", "en-US", "en-GB", "en-orig"] + list(all_subs.keys())
+
+    for lang in priority:
+        if lang not in all_subs:
+            continue
+        formats = all_subs[lang]
+        # Prefer json3 (easiest to parse), then vtt, then any
+        for preferred_ext in ("json3", "vtt", None):
+            for fmt in formats:
+                if preferred_ext is None or fmt.get("ext") == preferred_ext:
+                    try:
+                        r = http_requests.get(fmt["url"], timeout=15)
+                        if r.status_code != 200:
+                            continue
+
+                        if fmt.get("ext") == "json3":
+                            data = r.json()
+                            pieces = []
+                            for event in data.get("events", []):
+                                for seg in event.get("segs", []):
+                                    t = seg.get("utf8", "").strip()
+                                    if t and t != "\n":
+                                        pieces.append(t)
+                            text = " ".join(pieces)
+                        else:
+                            # Strip VTT timing lines naively
+                            import re
+                            text = re.sub(
+                                r"(\d{2}:)?\d{2}:\d{2}\.\d{3} --> .*|WEBVTT.*|<[^>]+>",
+                                "",
+                                r.text,
+                            )
+                            text = " ".join(text.split())
+
+                        if text:
+                            return {"video_id": video_id, "text": text, "language": lang}
+                    except Exception:
+                        continue
+
+    raise ValueError("yt-dlp found subtitle tracks but could not download any.")
+
+
+# ─── Public API ────────────────────────────────────────────
+
 
 def load_transcript(video_url: str) -> dict:
     """
-    Fetch transcript for a given YouTube URL.
-    Includes an automatic fallback to free residential proxies if the primary Cloud IP is blocked.
+    Fetch transcript using a three-tier strategy:
+      1. youtube-transcript-api directly (fast, local)
+      2. yt-dlp CDN fetch (bypasses cloud IP bans)
+      3. youtube-transcript-api with free proxy fallback
     """
     video_id = get_video_id(video_url)
 
-    # 1. Try directly first (fastest, works on local development)
+    # ── Tier 1: direct ─────────────────────────────────────
     try:
-        return fetch_with_api(video_id)
+        return _ytt_api_fetch(video_id)
     except TranscriptsDisabled:
         raise ValueError(
-            f"Transcripts/subtitles are completely disabled for this video ({video_id}). "
-            "Please try a different video."
+            f"Subtitles are disabled for this video ({video_id}). Try a different video."
         )
-    except Exception as direct_err:
-        # If the error is likely an IP ban, we try proxies
-        err_msg = str(direct_err).lower()
-        if "blocking requests from your ip" not in err_msg and "too many requests" not in err_msg:
-            # If it's not an IP ban, it's likely a real error (like video deleted or no subs created yet)
-            raise ValueError(f"Could not retrieve transcript for video '{video_id}'. Error: {str(direct_err)}")
+    except Exception as e1:
+        ip_blocked = any(k in str(e1).lower() for k in ("blocking requests", "too many requests", "ipblocked", "requestblocked"))
+        if not ip_blocked:
+            raise ValueError(f"Could not retrieve transcript: {e1}")
 
-    # 2. IP Ban detected! Try fallback proxies
-    proxies = get_free_proxies()
-    if not proxies:
-        raise ValueError("YouTube blocked the server IP and no backup proxies were available. Please try again later.")
+    # ── Tier 2: yt-dlp CDN ─────────────────────────────────
+    try:
+        return _ytdlp_fetch(video_url, video_id)
+    except Exception:
+        pass
 
-    # Try up to 8 different free proxies
-    max_retries = min(8, len(proxies))
-    for i in range(max_retries):
-        proxy_url = f"http://{proxies[i]}"
+    # ── Tier 3: free proxy fallback ────────────────────────
+    try:
+        r = http_requests.get(
+            "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/http.txt",
+            timeout=5,
+        )
+        proxies = [p.strip() for p in r.text.strip().split("\n") if p.strip()]
+        random.shuffle(proxies)
+    except Exception:
+        proxies = []
+
+    for proxy in proxies[:10]:
         try:
-            return fetch_with_api(video_id, proxies_dict={"http": proxy_url, "https": proxy_url})
+            api = YouTubeTranscriptApi(proxies={"http": f"http://{proxy}", "https": f"http://{proxy}"})
+            transcript_list = api.list(video_id)
+            fetched, lang_used = None, None
+            for lang in ["en", "en-US", "en-GB"]:
+                try:
+                    fetched = transcript_list.find_transcript([lang]).fetch()
+                    lang_used = lang
+                    break
+                except NoTranscriptFound:
+                    continue
+            if fetched is None:
+                first = next(iter(transcript_list))
+                fetched = first.fetch()
+                lang_used = first.language_code
+            text = " ".join(s.text for s in fetched.snippets)
+            return {"video_id": video_id, "text": text, "language": lang_used}
         except Exception:
-            continue # Try next proxy
+            continue
 
-    raise ValueError("YouTube blocked the server IP and all backup proxies failed. Please try again later.")
+    raise ValueError(
+        "Could not retrieve transcript — YouTube is blocking cloud server IPs for this video. "
+        "Please try a video with English subtitles, or try again later."
+    )

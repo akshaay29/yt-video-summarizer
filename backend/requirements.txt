@@ -8,3 +8,4 @@ youtube-transcript-api
 pydantic
 python-dotenv
 google-genai
+yt-dlp
