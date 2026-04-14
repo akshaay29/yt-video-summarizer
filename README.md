@@ -1,118 +1,87 @@
-# AgentTube AI 🎬🤖
+<div align="center">
+  <img src="https://raw.githubusercontent.com/tandpfun/skill-icons/main/icons/React-Dark.svg" width="60" />
+  <img src="https://raw.githubusercontent.com/tandpfun/skill-icons/main/icons/Vite-Dark.svg" width="60" />
+  <img src="https://raw.githubusercontent.com/tandpfun/skill-icons/main/icons/Python-Dark.svg" width="60" />
+  <img src="https://raw.githubusercontent.com/tandpfun/skill-icons/main/icons/FastAPI-Dark.svg" width="60" />
+  <br/>
+  
+  # 🚀 AgentTube AI
 
-A production-grade AI application to **summarize YouTube videos** and **chat with their content** using a RAG (Retrieval-Augmented Generation) pipeline powered by Google Gemini.
+  **Elevate Your Video Experience with AI**
+  
+  [**Live Website (agentube-ai.vercel.app)**](https://agentube-ai.vercel.app/) • [**Report Bug**](https://github.com/akshaay29/yt-video-summarizer/issues)
+
+</div>
+
+<br/>
+
+AgentTube AI is a production-grade application that intelligently extracts transcripts from any YouTube video and leverages the power of **Google Gemini 2.5 Flash** to provide crisp summaries and an interactive chat interface. 
+
+It handles everything from raw extraction to advanced RAG (Retrieval-Augmented Generation) so you can directly "talk" to your videos.
+
+## ✨ Key Features
+- **🌐 Cloud-Bypass Architecture**: Intelligent multi-tiered transcript extraction (Native API -> `yt-dlp` -> Free Proxies -> Native Gemini Integration) to bypass YouTube data-center blocks.
+- **🇮🇳 Multi-Language Support**: Automatically detects and processes content in Hindi, English, and other languages seamlessly.
+- **🤖 Powered by Gemini 2.5**: High accuracy parsing and response generation using Google's fastest LLM.
+- **💬 RAG Chatbot**: Don't just read the summary—ask specific questions about the video and get context-aware answers.
+- **💎 Premium UI**: Built with React & Vite using modern Glassmorphism, animations, and beautiful dark modes.
+
+## 🛠️ Tech Stack
+* **Frontend:** React, Vite, Custom Animated CSS
+* **Backend:** FastAPI, Python
+* **AI/Embeddings:** Google GenAI SDK (`gemini-2.5-flash`, `gemini-embedding-001`)
+* **Vector Store:** FAISS (In-Memory Document Retrieval)
+* **Deployment:** Vercel (Frontend), Render (Backend)
 
 ---
 
-## ✨ Features
+## 💻 Run Locally
 
-- 🎯 Paste any YouTube URL and get an instant AI-generated summary
-- 🤖 Chat with the video using RAG (FAISS + Google Gemini Embeddings)
-- 🌍 Supports videos in any language (summarized in English)
-- 🎨 Beautiful dark UI with animated floating shapes
-- ⚡ FastAPI backend + React frontend
-
----
-
-## 🧱 Tech Stack
-
-| Layer | Technology |
-|---|---|
-| Frontend | React + Vite + Pure CSS |
-| Backend | FastAPI (Python) |
-| AI / LLM | Google Gemini 2.5 Flash |
-| RAG | LangChain + FAISS |
-| Transcripts | youtube-transcript-api |
-
----
-
-## 🚀 Getting Started
+To get a local instance running, follow these simple steps.
 
 ### Prerequisites
 - Python 3.10+
 - Node.js 18+
-- A [Google Gemini API Key](https://aistudio.google.com/app/apikey)
+- [Google Gemini API Key](https://aistudio.google.com/)
 
----
-
-### 1. Clone the repo
+### 1. Start the Backend
 ```bash
-git clone https://github.com/akshaay29/yt-video-summarizer.git
-cd yt-video-summarizer
-```
-
-### 2. Backend Setup
-```bash
+# Navigate to backend 
 cd backend
 
-# Create virtual environment
+# Create a virtual environment
 python -m venv venv
 
-# Activate it (Windows PowerShell)
+# Activate it (Windows)
 .\venv\Scripts\activate
+# Activate it (Mac/Linux)
+# source venv/bin/activate
 
 # Install dependencies
 pip install -r requirements.txt
 
-# Create .env file
-echo GOOGLE_API_KEY=your_api_key_here > .env
+# Create .env file and add your API Key
+echo 'GOOGLE_API_KEY="your_api_key_here"' > .env
 
-# Start the server
+# Run the FastAPI server
 uvicorn main:app --reload
 ```
-Backend runs at: `http://localhost:8000`
 
----
-
-### 3. Frontend Setup
+### 2. Start the Frontend
 ```bash
+# Open a new terminal and navigate to frontend
 cd frontend
 
-# Install dependencies
+# Install packages
 npm install
 
-# Start dev server
+# Start the Vite development server
 npm run dev
 ```
-Frontend runs at: `http://localhost:5173`
+The application will launch at `http://localhost:5173`.
 
 ---
 
-## 📁 Project Structure
-
-```
-├── backend/
-│   ├── main.py                  # FastAPI app (routes)
-│   ├── requirements.txt
-│   ├── .env                     # Your API key (not committed)
-│   └── services/
-│       ├── transcript_loader.py # YouTube transcript extraction
-│       ├── summarizer.py        # Gemini summarization
-│       └── rag_pipeline.py      # FAISS + RAG chat
-│
-└── frontend/
-    ├── src/
-    │   ├── App.jsx              # Main app component
-    │   ├── index.css            # All styles (pure CSS)
-    │   └── services/
-    │       └── api.js           # Axios API calls
-    └── package.json
-```
-
----
-
-## 🔌 API Endpoints
-
-| Method | Endpoint | Description |
-|---|---|---|
-| POST | `/summarize` | Extract transcript + generate summary + build RAG index |
-| POST | `/chat` | Answer query using RAG pipeline |
-
----
-
-## ⚙️ Environment Variables
-
-Create `backend/.env`:
-```
-GOOGLE_API_KEY=your_gemini_api_key_here
-```
+<div align="center">
+  <i>Developed with ❤️ by Akshay</i>
+</div>
