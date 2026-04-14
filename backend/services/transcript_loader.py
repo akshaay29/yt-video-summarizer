@@ -38,8 +38,9 @@ def get_free_proxies():
 
 def fetch_with_api(video_id: str, proxies_dict=None):
     """Helper to fetch transcript using the API, optionally with a proxy."""
-    api = YouTubeTranscriptApi()
-    transcript_list = api.list(video_id, proxies=proxies_dict)
+    # In youtube-transcript-api v1.x, proxies go to the constructor, not list()
+    api = YouTubeTranscriptApi(proxies=proxies_dict) if proxies_dict else YouTubeTranscriptApi()
+    transcript_list = api.list(video_id)
 
     fetched = None
     language_used = None
