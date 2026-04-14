@@ -180,26 +180,44 @@ def load_transcript(video_url: str) -> dict:
         except Exception:
             continue
 
-    # ── Tier 4: Gemini Native YouTube Parsing (Bulletproof!)
+    # ── Tier 4: Gemini Native YouTube Parsing (Ultimate Fallback)
     import os
+    import time
     from google import genai
     api_key = os.environ.get("GOOGLE_API_KEY")
+    gemini_error_msg = None
     if api_key:
-        try:
-            client = genai.Client(api_key=api_key)
-            prompt = f"Return the raw, exact, word-for-word transcript of this video, nothing else: {video_url}"
-            response = client.models.generate_content(
-                model="gemini-2.5-flash", 
-                contents=prompt
-            )
-            if response.text and len(response.text) > 100:
-                print("Successfully loaded transcript via Gemini native integration!")
-                return {"video_id": video_id, "text": response.text, "language": "en"}
-        except Exception as e:
-            print(f"Gemini fallback failed: {e}")
+        client = genai.Client(api_key=api_key)
+        prompt = f"Return the raw, exact, word-for-word transcript of this video, nothing else: {video_url}"
+        
+        # Retry logic for 503 UNAVAILABLE errors during high load
+        for attempt in range(3):
+            try:
+                response = client.models.generate_content(
+                    model="gemini-2.5-flash", 
+                    contents=prompt
+                )
+                if response.text and len(response.text) > 100:
+                    print(f"Successfully loaded transcript via Gemini native integration on attempt {attempt+1}!")
+                    return {"video_id": video_id, "text": response.text, "language": "en"}
+            except Exception as e:
+                err_str = str(e)
+                if "503" in err_str or "demand" in err_str.lower():
+                    gemini_error_msg = "Google Gemini API is experiencing high demand (503). Retrying..."
+                    print(gemini_error_msg)
+                    time.sleep(2)  # Wait before retry
+                    continue
+                else:
+                    gemini_error_msg = f"Gemini fallback failed: {err_str}"
+                    print(gemini_error_msg)
+                    break # Break on non-503 errors
 
-    raise ValueError(
-        "Could not retrieve transcript — YouTube is blocking cloud server IPs for this video. "
-        "Please try a video with English subtitles, or try again later."
-    )
+    # If we reached here, ALL TIERS FAILED.
+    # Determine the most accurate error message to show the user.
+    if gemini_error_msg and ("503" in gemini_error_msg or "demand" in gemini_error_msg.lower()):
+        raise ValueError("Google Gemini API is currently overloaded (503). Please wait a few moments and try again.")
+    elif gemini_error_msg:
+        raise ValueError(f"Could not retrieve transcript. YouTube IP block active, and Gemini fallback failed: {gemini_error_msg}")
+    else:
+        raise ValueError("Could not retrieve transcript — YouTube is blocking server IPs and fallback systems failed. Try again later.")
 
