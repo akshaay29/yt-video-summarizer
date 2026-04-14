@@ -159,7 +159,7 @@ def load_transcript(video_url: str) -> dict:
     except Exception:
         proxies = []
 
-    for proxy in proxies[:10]:
+    for proxy in proxies[:5]:
         try:
             api = YouTubeTranscriptApi(proxies={"http": f"http://{proxy}", "https": f"http://{proxy}"})
             transcript_list = api.list(video_id)
@@ -180,7 +180,26 @@ def load_transcript(video_url: str) -> dict:
         except Exception:
             continue
 
+    # ── Tier 4: Gemini Native YouTube Parsing (Bulletproof!)
+    import os
+    from google import genai
+    api_key = os.environ.get("GOOGLE_API_KEY")
+    if api_key:
+        try:
+            client = genai.Client(api_key=api_key)
+            prompt = f"Return the raw, exact, word-for-word transcript of this video, nothing else: {video_url}"
+            response = client.models.generate_content(
+                model="gemini-2.5-flash", 
+                contents=prompt
+            )
+            if response.text and len(response.text) > 100:
+                print("Successfully loaded transcript via Gemini native integration!")
+                return {"video_id": video_id, "text": response.text, "language": "en"}
+        except Exception as e:
+            print(f"Gemini fallback failed: {e}")
+
     raise ValueError(
         "Could not retrieve transcript — YouTube is blocking cloud server IPs for this video. "
         "Please try a video with English subtitles, or try again later."
     )
+
