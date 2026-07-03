@@ -27,6 +27,20 @@ def generate_summary(transcript_text: str) -> str:
             model="gemini-2.5-flash",
             contents=prompt,
         )
-        return response.text
+        # Gemini returns no text when a safety filter trips or finish_reason
+        # != STOP. Depending on the SDK path, `.text` may be empty/None OR raise
+        # on access — treat both the same so the user gets a clear message
+        # instead of the string "null" or a raw SDK error.
+        try:
+            summary_text = response.text
+        except Exception:
+            summary_text = None
+        if not summary_text:
+            raise ValueError(
+                "Gemini returned an empty summary (possibly blocked). Please try again."
+            )
+        return summary_text
+    except ValueError:
+        raise
     except Exception as e:
         raise ValueError(f"Failed to generate summary: {str(e)}")
