@@ -13,16 +13,22 @@ load_dotenv()
 
 app = FastAPI(title="AgentTube AI API")
 
-# Configure CORS — reads from ALLOWED_ORIGINS env var, defaults to allow all
+# Configure CORS — reads from ALLOWED_ORIGINS env var, defaults to allow all.
 raw_origins = os.environ.get("ALLOWED_ORIGINS", "*")
 if raw_origins == "*":
     allowed_origins = ["*"]
 else:
     allowed_origins = [o.strip() for o in raw_origins.split(",")]
 
+# Always allow this project's Vercel deployments (production + preview URLs)
+# regardless of the ALLOWED_ORIGINS value. The live frontend origin has drifted
+# from what ALLOWED_ORIGINS was pinned to (e.g. agentube-ai.vercel.app vs the
+# older -eta URL), which silently CORS-blocked every browser request. Matching
+# *.vercel.app by regex makes the backend resilient to that drift.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
+    allow_origin_regex=r"https://([a-z0-9-]+\.)*vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
