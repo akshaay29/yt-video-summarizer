@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import ReactMarkdown from 'react-markdown';
 import { summarizeVideo, chatWithVideo } from './services/api';
 import '../src/index.css';
 
@@ -79,7 +80,10 @@ function SummaryCard({ summary }) {
         </button>
       </div>
       <div className="card-body" style={{ overflowY: 'auto', flex: 1 }}>
-        <p className="summary-text">{summary}</p>
+        {/* Gemini returns markdown; render it instead of showing raw #/-/* */}
+        <div className="summary-text">
+          <ReactMarkdown>{summary}</ReactMarkdown>
+        </div>
       </div>
     </div>
   );

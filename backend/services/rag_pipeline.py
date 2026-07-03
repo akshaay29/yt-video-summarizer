@@ -64,6 +64,20 @@ def chat_with_video(video_id: str, query: str) -> str:
             model="gemini-2.5-flash",
             contents=prompt,
         )
-        return response.text
+        # Gemini returns no text when a safety filter trips or finish_reason
+        # != STOP. Depending on the SDK path, `.text` may be empty/None OR raise
+        # on access — treat both the same so the user gets a clear message
+        # instead of the string "null" or a raw SDK error.
+        try:
+            answer_text = response.text
+        except Exception:
+            answer_text = None
+        if not answer_text:
+            raise ValueError(
+                "Gemini returned an empty answer (possibly blocked). Please try again."
+            )
+        return answer_text
+    except ValueError:
+        raise
     except Exception as e:
         raise ValueError(f"Failed to generate answer: {str(e)}")

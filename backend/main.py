@@ -29,7 +29,11 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
     allow_origin_regex=r"https://([a-z0-9-]+\.)*vercel\.app",
-    allow_credentials=True,
+    # allow_credentials MUST be False here: the CORS spec forbids pairing
+    # credentialed requests with a wildcard ("*") origin, and browsers reject
+    # it. This app sends no cookies/credentials, so False is both correct and
+    # keeps allow_origins=["*"] / the vercel regex valid.
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )

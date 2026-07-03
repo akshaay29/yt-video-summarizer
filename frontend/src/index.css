@@ -370,8 +370,40 @@ html, body, #root {
   color: #ccc;
   line-height: 1.8;
   font-size: 0.95rem;
-  white-space: pre-wrap;
 }
+/* react-markdown emits real block elements; style them so headings and lists
+   are visually distinct instead of inheriting flat body text. white-space is
+   intentionally NOT pre-wrap here — blocks control their own spacing. */
+.summary-text > :first-child { margin-top: 0; }
+.summary-text > :last-child { margin-bottom: 0; }
+.summary-text h1, .summary-text h2, .summary-text h3 {
+  color: #fff;
+  font-weight: 600;
+  line-height: 1.3;
+  margin: 1.1em 0 0.5em;
+}
+.summary-text h1 { font-size: 1.25rem; }
+.summary-text h2 { font-size: 1.1rem; }
+.summary-text h3 { font-size: 1rem; }
+.summary-text p { margin: 0 0 0.75em; }
+.summary-text ul, .summary-text ol { margin: 0 0 0.75em; padding-left: 1.4em; }
+.summary-text li { margin: 0.25em 0; }
+.summary-text strong { color: #fff; font-weight: 600; }
+.summary-text a { color: #8b7cff; text-decoration: underline; }
+.summary-text code {
+  background: rgba(255, 255, 255, 0.08);
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+  font-size: 0.85em;
+}
+.summary-text pre {
+  background: rgba(255, 255, 255, 0.06);
+  padding: 0.8em;
+  border-radius: 8px;
+  overflow-x: auto;
+  margin: 0 0 0.75em;
+}
+.summary-text pre code { background: none; padding: 0; }
 
 .copy-btn {
   display: flex; align-items: center; gap: 6px;
