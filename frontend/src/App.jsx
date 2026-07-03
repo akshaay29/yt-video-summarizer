@@ -175,6 +175,20 @@ function extractVideoId(url) {
   } catch { return null; }
 }
 
+// Turn an axios error into a message that tells the user what to actually do.
+// The backend (Render free tier) sleeps after ~15 min idle, so the first
+// request can time out or fail to connect while it cold-starts (~1 min).
+function friendlyError(err) {
+  if (err?.code === 'ECONNABORTED' || /timeout/i.test(err?.message || '')) {
+    return 'The server took too long to respond — it may be waking up from sleep. Please try again in a moment.';
+  }
+  if (err?.response?.data?.detail) return err.response.data.detail;
+  if (err?.request && !err?.response) {
+    return 'Could not reach the server. It may be starting up (this can take up to a minute on the first request) — please retry shortly.';
+  }
+  return 'Something went wrong — please try another video.';
+}
+
 export default function App() {
   const [url, setUrl] = useState('');
   const [videoId, setVideoId] = useState('');
@@ -198,13 +212,14 @@ export default function App() {
       setSummary(data.summary);
       if (!id && data.video_id) setVideoId(data.video_id);
     } catch (err) {
-      setError(err.response?.data?.detail || 'Something went wrong — please try another video.');
+      setError(friendlyError(err));
     } finally {
       setLoading(false);
     }
   };
 
   const handleChat = async (query) => {
+    if (!activeUrl) throw new Error('Summarize a video first, then ask questions about it.');
     const data = await chatWithVideo(activeUrl, query);
     return data.answer;
   };
@@ -267,6 +282,9 @@ export default function App() {
         <div className="loader-wrap">
           <div className="spinner" />
           <p>Analyzing transcript &amp; building RAG index…</p>
+          <p style={{ fontSize: '0.8rem', color: 'var(--muted)', marginTop: 4 }}>
+            First request can take up to a minute while the server wakes up.
+          </p>
         </div>
       )}
 
