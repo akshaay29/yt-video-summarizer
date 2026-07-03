@@ -4,6 +4,10 @@ import axios from 'axios';
 // e.g. VITE_API_URL=https://agenttube-ai-backend.onrender.com
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8000',
+  // The Render free tier spins the backend down after ~15 min idle, so the
+  // first request can take up to ~75s to cold-start. Allow generous time
+  // instead of hanging forever, and let the UI show a "waking up" message.
+  timeout: 120000,
 });
 
 export const summarizeVideo = async (videoUrl) => {

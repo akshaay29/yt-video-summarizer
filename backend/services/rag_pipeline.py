@@ -4,8 +4,15 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 
-# In-memory store: video_id → FAISS vectorstore
+# In-memory store: video_id → FAISS vectorstore.
+# NOTE: this is process-local and evaporates on restart / cold start
+# (e.g. Render free tier spinning down). /chat therefore re-indexes on
+# demand when a video is missing here — see main.py chat_video().
 vector_stores: dict = {}
+
+def has_index(video_id: str) -> bool:
+    """Whether an in-memory FAISS index currently exists for this video."""
+    return video_id in vector_stores
 
 def index_transcript(video_id: str, transcript_text: str) -> bool:
     """Chunk the transcript, embed it, and store in FAISS."""

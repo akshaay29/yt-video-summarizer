@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 
 from services.transcript_loader import load_transcript, get_video_id
 from services.summarizer import generate_summary
-from services.rag_pipeline import index_transcript, chat_with_video
+from services.rag_pipeline import index_transcript, chat_with_video, has_index
 
 # Load environment variables (API Key)
 load_dotenv()
@@ -67,6 +67,15 @@ def summarize_video(user_req: SummarizeRequest):
 def chat_video(user_req: ChatRequest):
     try:
         video_id = get_video_id(user_req.video_url)
+
+        # Self-heal: the RAG index is in-memory and is lost whenever the
+        # server restarts or cold-starts (Render free tier spins down after
+        # ~15 min idle). If it's gone, rebuild it on demand from the
+        # transcript instead of forcing the user to click Summarize again.
+        if not has_index(video_id):
+            transcript_data = load_transcript(user_req.video_url)
+            index_transcript(transcript_data["video_id"], transcript_data["text"])
+
         answer = chat_with_video(video_id, user_req.query)
         return {"answer": answer}
     except ValueError as ve:
