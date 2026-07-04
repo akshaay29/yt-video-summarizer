@@ -21,14 +21,16 @@ else:
     allowed_origins = [o.strip() for o in raw_origins.split(",")]
 
 # Always allow this project's Vercel deployments (production + preview URLs)
-# regardless of the ALLOWED_ORIGINS value. The live frontend origin has drifted
-# from what ALLOWED_ORIGINS was pinned to (e.g. agentube-ai.vercel.app vs the
-# older -eta URL), which silently CORS-blocked every browser request. Matching
-# *.vercel.app by regex makes the backend resilient to that drift.
+# AND local dev servers, regardless of the ALLOWED_ORIGINS value. The live
+# frontend origin has drifted from what ALLOWED_ORIGINS was pinned to (e.g.
+# agentube-ai.vercel.app vs the older -eta URL), which silently CORS-blocked
+# every browser request. Matching *.vercel.app by regex makes the backend
+# resilient to that drift; the localhost / 127.0.0.1 alternatives let a
+# locally-run frontend (any Vite port) talk to this deployed backend in dev.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
-    allow_origin_regex=r"https://([a-z0-9-]+\.)*vercel\.app",
+    allow_origin_regex=r"https://([a-z0-9-]+\.)*vercel\.app|http://localhost(:\d+)?|http://127\.0\.0\.1(:\d+)?",
     # allow_credentials MUST be False here: the CORS spec forbids pairing
     # credentialed requests with a wildcard ("*") origin, and browsers reject
     # it. This app sends no cookies/credentials, so False is both correct and
