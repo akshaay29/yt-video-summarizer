@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { summarizeVideo, chatWithVideo } from './services/api';
+import { Agentation } from 'agentation';
 import '../src/index.css';
 
 /* ─────────────────────────────────────────
@@ -24,19 +25,20 @@ function BgCanvas() {
 /* ─────────────────────────────────────────
    SVG ICONS
 ───────────────────────────────────────── */
-const PlayIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-    <path d="M8 5v14l11-7z"/>
-  </svg>
-);
-const SparkleIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-    <path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/>
-  </svg>
-);
 const SendIcon = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+  </svg>
+);
+// Four-point violet sparkle — marks AI surfaces (never an emoji).
+const SparkleIcon = ({ size = 14 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+    <path d="M12 2l2.2 6.6L21 11l-6.8 2.4L12 20l-2.2-6.6L3 11l6.8-2.4z"/>
+  </svg>
+);
+const AlertIcon = ({ size = 15 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
   </svg>
 );
 const CopyIcon = () => (
@@ -73,7 +75,7 @@ function SummaryCard({ summary }) {
   return (
     <div className="glass-card" style={{ height: '520px', display: 'flex', flexDirection: 'column' }}>
       <div className="card-header">
-        <span className="card-title">✨ AI Summary</span>
+        <span className="card-title"><span className="spark"><SparkleIcon size={16} /></span> Summary</span>
         <button className="copy-btn" onClick={handleCopy}>
           {copied ? <CheckIcon /> : <CopyIcon />}
           {copied ? 'Copied!' : 'Copy'}
@@ -129,7 +131,7 @@ function ChatCard({ onSendMessage }) {
           <div className="avatar ai"><BotIcon /></div>
           <div>
             <div className="card-title">Chat with Video</div>
-            <div className="rag-badge">RAG Pipeline Active</div>
+            <div className="rag-badge">RAG active</div>
           </div>
         </div>
       </div>
@@ -144,6 +146,11 @@ function ChatCard({ onSendMessage }) {
                 <div className="typing-dots">
                   <span /><span /><span />
                 </div>
+              ) : msg.error ? (
+                <>
+                  <span className="alert"><AlertIcon /></span>
+                  <span>{msg.content}</span>
+                </>
               ) : msg.content}
             </div>
           </div>
@@ -237,17 +244,13 @@ export default function App() {
       {/* ── HERO ── */}
       <div className="hero">
         <div className="hero-badge">
-          <PlayIcon />
-          <SparkleIcon />
-          <span>AgentTube AI · RAG Powered</span>
+          <span className="spark"><SparkleIcon size={13} /></span>
+          <span>AgentTube AI</span>
         </div>
-        <h1>
-          <span className="line1">Elevate Your Video</span>
-          <span className="line2">Experience with AI</span>
-        </h1>
+        <h1>Talk to any video.</h1>
         <p>
-          Paste any YouTube URL to instantly get a comprehensive summary
-          and ask questions with bot.
+          Paste a YouTube link. Get a crisp summary in seconds, then ask the
+          video anything — answers grounded in what was actually said.
         </p>
       </div>
 
@@ -271,7 +274,7 @@ export default function App() {
                   Processing...
                 </>
               ) : (
-                <>✨ Summarize</>
+                <><SparkleIcon size={15} /> Summarize</>
               )}
             </button>
           </form>
@@ -279,7 +282,12 @@ export default function App() {
       </div>
 
       {/* ── ERROR ── */}
-      {error && <div className="error-banner">⚠️ {error}</div>}
+      {error && (
+        <div className="error-banner" role="alert">
+          <span className="alert"><AlertIcon /></span>
+          <span>{error}</span>
+        </div>
+      )}
 
       {/* ── LOADING ── */}
       {loading && (
@@ -312,6 +320,9 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* Dev-only visual feedback toolbar (never ships to production) */}
+      {import.meta.env.DEV && <Agentation />}
     </div>
   );
 }
