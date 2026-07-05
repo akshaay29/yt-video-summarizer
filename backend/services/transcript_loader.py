@@ -22,6 +22,33 @@ def get_video_id(url: str) -> str:
         raise ValueError(f"Could not extract video ID from: {url}. ({e})")
 
 
+# Refusal-SPECIFIC phrases that mark a Gemini "I can't read this video" reply
+# rather than a real transcript. These are deliberately multi-word and rare in
+# ordinary speech — bare fragments like "i cannot" match real dialogue (e.g.
+# "I cannot predict the future") and cause false rejections, so they are avoided.
+_REFUSAL_MARKERS = (
+    "unable to retrieve", "unable to provide", "unable to access",
+    "unable to fulfill", "cannot access", "can't access", "cannot provide",
+    "can't provide", "cannot retrieve", "can't retrieve", "cannot fulfill",
+    "can't fulfill", "provide the transcript", "invalid or non-existent",
+    "as an ai", "i'm sorry, but", "i am sorry, but", "no transcript is available",
+)
+
+
+def _looks_like_real_transcript(text: str) -> bool:
+    """True only when text looks like actual video content — not empty or a refusal.
+
+    A refusal is a short meta-message declining to transcribe; it opens with one of
+    the refusal-specific phrases above. We scan only the opening (first ~200 chars)
+    for those phrases so a genuine transcript that merely says "I cannot ..." mid-
+    sentence is not falsely rejected.
+    """
+    if not text or len(text.strip()) < 60:
+        return False
+    head = text.strip().lower()[:200]
+    return not any(marker in head for marker in _REFUSAL_MARKERS)
+
+
 def _ytt_api_fetch(video_id: str) -> dict:
     """
     Attempt transcript retrieval via youtube-transcript-api.
@@ -180,26 +207,55 @@ def load_transcript(video_url: str) -> dict:
         except Exception:
             continue
 
-    # ── Tier 4: Gemini Native YouTube Parsing (Ultimate Fallback)
+    # ── Tier 4: Gemini native video understanding (Ultimate Fallback)
+    # Pass the YouTube URL to Gemini as a VIDEO input (file_data/file_uri) so the
+    # model ingests the actual public video. Previously the URL was embedded in a
+    # text prompt — the text API can't watch the video, so Gemini hallucinated a
+    # transcript or returned a refusal, which then got summarized as garbage.
+    # (YouTube-URL input is public-videos-only, preview/free tier.)
     import os
     import time
     from google import genai
+    from google.genai import types
     api_key = os.environ.get("GOOGLE_API_KEY")
     gemini_error_msg = None
     if api_key:
         client = genai.Client(api_key=api_key)
-        prompt = f"Return the raw, exact, word-for-word transcript of this video, nothing else: {video_url}"
-        
-        # Retry logic for 503 UNAVAILABLE errors during high load
+        # Pass the CANONICAL watch URL (not the raw, param-laden input) as a video
+        # part so Gemini ingests the real video. Ask for a faithful transcript
+        # rather than strict "verbatim" to reduce RECITATION/safety blocks.
+        canonical_url = f"https://www.youtube.com/watch?v={video_id}"
+        contents = types.Content(
+            parts=[
+                types.Part(file_data=types.FileData(file_uri=canonical_url)),
+                types.Part(text=(
+                    "Provide a faithful, detailed transcript of what is actually said "
+                    "in this video — the spoken words, in order. No commentary or headings."
+                )),
+            ]
+        )
+
+        # Retry transient failures (503 overload, and empty/blocked responses).
         for attempt in range(3):
             try:
                 response = client.models.generate_content(
-                    model="gemini-2.5-flash", 
-                    contents=prompt
+                    model="gemini-2.5-flash",
+                    contents=contents,
                 )
-                if response.text and len(response.text) > 100:
-                    print(f"Successfully loaded transcript via Gemini native integration on attempt {attempt+1}!")
-                    return {"video_id": video_id, "text": response.text, "language": "en"}
+                # `.text` can RAISE (not just be None) when a candidate is blocked
+                # (safety / recitation) — mirror summarizer.py & rag_pipeline.py.
+                try:
+                    text = response.text
+                except Exception:
+                    text = None
+                if _looks_like_real_transcript(text):
+                    print(f"Successfully loaded transcript via Gemini video understanding on attempt {attempt+1}!")
+                    return {"video_id": video_id, "text": text, "language": "en"}
+                # Empty / blocked / refusal-like → may be transient, so retry;
+                # if all attempts fail we fall through to the ValueError below.
+                gemini_error_msg = "Gemini could not produce a usable transcript for this video."
+                print(gemini_error_msg)
+                continue
             except Exception as e:
                 err_str = str(e)
                 if "503" in err_str or "demand" in err_str.lower():
@@ -210,14 +266,16 @@ def load_transcript(video_url: str) -> dict:
                 else:
                     gemini_error_msg = f"Gemini fallback failed: {err_str}"
                     print(gemini_error_msg)
-                    break # Break on non-503 errors
+                    break  # Break on non-503 errors
 
     # If we reached here, ALL TIERS FAILED.
     # Determine the most accurate error message to show the user.
     if gemini_error_msg and ("503" in gemini_error_msg or "demand" in gemini_error_msg.lower()):
         raise ValueError("Google Gemini API is currently overloaded (503). Please wait a few moments and try again.")
-    elif gemini_error_msg:
-        raise ValueError(f"Could not retrieve transcript. YouTube IP block active, and Gemini fallback failed: {gemini_error_msg}")
     else:
-        raise ValueError("Could not retrieve transcript — YouTube is blocking server IPs and fallback systems failed. Try again later.")
+        raise ValueError(
+            "Could not obtain a real transcript for this video. YouTube is blocking "
+            "the server's IP and the video could not be read directly (it may be "
+            "private, unlisted, region-locked, or have no speech). Try a different video."
+        )
 
